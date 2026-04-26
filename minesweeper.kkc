@@ -1,0 +1,203 @@
+GameState
+	InProgress
+	Failed
+	Won
+
+inst Eq GameState
+	eq (l, r): (case (l, r))
+		(InProgress, InProgress): True
+		(Failed, Failed): True
+		(Won, Won): True
+		_: False
+
+Tile
+	hidden Bool
+	is-bomb Bool
+	flagged Bool
+
+TileMap
+	tiles Slice (Slice Tile)
+	width I32
+	height I32
+
+fn mk-tiles(w, h, al) -> TileMap
+	rows = al Alloc.allocate(h)
+	for row in rows Slice.addresses()
+		row <&= al Alloc.default(w, { hidden: True, is-bomb: False, flagged: False })
+	return { tiles: rows, width: w size-i32(), height: h size-i32() }
+
+fn map-tile(tilemap TileMap, x, y, fun)
+	tp = tilemap.tiles[y i32-size()] Slice.get-ptr(x i32-size())
+	tp <&= fun(tp&)
+
+inst Indexable TileMap
+	elem-get (self, idx)
+		x = idx fst() i32-size()
+		y = idx snd() i32-size()
+		return self.tiles Slice.try-get(y) and-maybe(fn s: s Slice.try-get(x)) or-else({ is-bomb: False, hidden: False, flagged: False })
+
+
+fn generate-map (w, h, bombs, al) -> TileMap
+	tiles = mk-tiles(w, h, al)
+
+	for bomb in 1 to (bombs)
+		x = @undefined
+		y = @undefined
+		while True
+			x <= Random.next-u32() Math.mod(w size-u32()) u32-i32()
+			y <= Random.next-u32() Math.mod(h size-u32()) u32-i32()
+			if not tiles[(x, y)].is-bomb
+				break
+
+		tiles map-tile(x, y, fn _: { hidden: True, is-bomb: True, flagged: False })
+
+	return tiles
+
+# basado impl, but it does not want to compile monomorphize for some reason.
+# fn count-neighbor-bombs (tilemap TileMap, x, y):
+# 	(y - 1) to (y + 1)
+# 	cartesian((x - 1) to (x + 1))
+# 	filter(fn xy: tilemap[xy].is-bomb)
+# 	count()
+
+fn count-neighbor-bombs (tilemap TileMap, x, y)
+	neighbors = 0
+	for yy in (y - 1) to (y + 1)
+		for xx in (x - 1) to (x + 1)
+			if tilemap[(xx, yy)].is-bomb
+				neighbors <= neighbors + 1
+
+	return neighbors
+
+
+
+fn render-tiles (screen Ptr (Tui.Screen Allocator), tilemap TileMap, game-state)
+	for (row, y) in tilemap.tiles zip(from(0))
+		for (col, x) in row zip(from(0))
+			if col.hidden
+				screen Tui.set-screen-bg(Term.Color8(Term.White8))
+				if col.flagged
+					screen Tui.set-screen-fg(Term.Color8(Term.Blue8))
+					screen Tui.put-char('F', x, y)
+				else
+					screen Tui.put-char(' ', x, y)
+
+			else
+				screen Tui.set-screen-bg(Term.ColorDefault)
+				screen Tui.set-screen-fg(Term.ColorDefault)
+				num-bombs = tilemap count-neighbor-bombs(x, y)
+				if num-bombs == 0
+					screen Tui.put-char(' ', x, y)
+				else
+					num-bombs-char = num-bombs chars() head() or-fail('impossible:)')
+					screen Tui.put-char(num-bombs-char, x, y)
+
+			if game-state == Failed and col.is-bomb
+				if col.hidden
+					screen Tui.set-screen-fg(Term.Color8(Term.Red8))
+					screen Tui.set-screen-bg(Term.ColorDefault)
+					screen Tui.put-char('o', x, y)
+				else
+					screen Tui.set-screen-fg(Term.ColorDefault)
+					screen Tui.set-screen-bg(Term.Color8(Term.Red8))
+					screen Tui.put-char('o', x, y)
+
+
+fn is-game-won(tilemap TileMap) -> Bool:
+	tilemap.tiles flatten() all(fn(tile): (tile.is-bomb and tile.hidden) or (not tile.is-bomb and not tile.hidden))
+
+fn uncover-tile(tilemap TileMap, x, y) -> Bool
+	if x < 0 or x >= tilemap.width or y < 0 or y >= tilemap.height
+		return False
+	tile = tilemap[(x, y)]
+	if not tile.hidden
+		return False
+
+	tilemap map-tile(x, y, fn tile: tile { hidden: False })
+	if tile.is-bomb
+		return True
+	else
+		nb = tilemap count-neighbor-bombs(x, y)
+		if nb == 0
+			for yy in (y - 1) to (y + 1)
+				for xx in (x - 1) to (x + 1)
+					tilemap uncover-tile(xx, yy)
+		return False
+
+fn toggle-flag(tilemap TileMap, x, y)
+	if x < 0 or x >= tilemap.width or y < 0 or y >= tilemap.height
+		return False
+	tilemap map-tile(x, y, fn tile: tile { flagged: not tile.flagged })
+
+
+
+args = Args.get()
+width = 9
+height = 9
+bombs = 10
+case args
+	[l, r, bs]
+		width <= parse-int(l) or-fail('could not parse width') i64-size()
+		height <= parse-int(r) or-fail('could not parse height') i64-size()
+		bombs <= parse-int(bs) or-fail('could not parse bombs') i64-i32()
+	[]
+		pass
+	_
+		panic('args??')
+
+
+game-state = InProgress
+
+al = Alloc.idc()
+tilemap = generate-map(width, height, bombs, al)
+
+tui =& Tui.mk()
+al = Alloc.idc()
+screen =& tui Tui.mk-screen(al)
+
+running = True
+while running
+	needs-redraw = False
+	for ev in Iter.from-function(Tui.read-key)
+		needs-redraw <= True
+		case ev
+			Tui.Key(Tui.Char(c))
+				if c == 'q'
+					running <= False
+				if c == 'r'
+					tilemap <= generate-map(width, height, bombs, al)
+					game-state <= InProgress
+			Tui.Mouse(ev)
+				if ev.button == Tui.MouseLeft and ev.pressed
+					if game-state == InProgress
+						if not tilemap[(ev.x, ev.y)].flagged and tilemap uncover-tile(ev.x, ev.y)
+							game-state <= Failed
+
+						if game-state == InProgress and tilemap is-game-won()
+							game-state <= Won
+
+				if ev.button == Tui.MouseRight and ev.pressed
+					if game-state == InProgress
+						tilemap toggle-flag(ev.x, ev.y)
+
+	needs-redraw <= needs-redraw or screen Tui.resize-screen-if-needed()
+
+
+	if needs-redraw
+		screen Tui.clear-screen()
+		screen Tui.set-screen-colors(Term.ColorDefault, Term.ColorDefault)
+		screen Tui.fill-default()
+
+		screen render-tiles(tilemap, game-state)
+		screen Tui.set-screen-colors(Term.ColorDefault, Term.ColorDefault)
+		if game-state == Failed
+			screen Tui.draw-str('ya failed. restart? (r)', 0, tilemap.height)
+		elif game-state == Won
+			screen Tui.draw-str('ya won. quit? (q)', 0, tilemap.height)
+
+		screen Tui.render-screen()
+
+	Tui.sync(tui)
+
+screen Tui.free-screen()
+tui Tui.deinit()
