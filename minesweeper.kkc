@@ -71,11 +71,24 @@ fn count-neighbor-bombs (tilemap TileMap, x, y)
 
 
 
-fn render-tiles (screen Ptr (Tui.Screen Allocator), tilemap TileMap, game-state)
-	for (row, y) in tilemap.tiles zip(from(0))
-		for (col, x) in row zip(from(0))
+fn render-tiles (screen Ptr (Tui.Screen Allocator), tilemap TileMap, (x-off, y-off), game-state)
+	# draw border first
+	screen Tui.set-screen-bg(Term.Color8(Term.Magenta8))
+	for x in (-1) to (tilemap.width)
+		screen Tui.put-char(' ', x + x-off, y-off - 1)
+		screen Tui.put-char(' ', x + x-off, y-off + tilemap.height)
+	for y in 0 to (tilemap.height - 1)
+		screen Tui.put-char(' ', x-off - 1, y + y-off)
+		screen Tui.put-char(' ', x-off + tilemap.width, y + y-off)
+
+
+	for (row, yi) in tilemap.tiles zip(from(0))
+		for (col, xi) in row zip(from(0))
+			x = xi + x-off
+			y = yi + y-off
+			bg = if (xi + yi) Math.mod(2) == 0: Term.Color8(Term.White8) else Term.Color16(Term.BrightWhite16)
 			if col.hidden
-				screen Tui.set-screen-bg(Term.Color8(Term.White8))
+				screen Tui.set-screen-bg(bg)
 				if col.flagged
 					screen Tui.set-screen-fg(Term.Color8(Term.Blue8))
 					screen Tui.put-char('F', x, y)
@@ -83,9 +96,8 @@ fn render-tiles (screen Ptr (Tui.Screen Allocator), tilemap TileMap, game-state)
 					screen Tui.put-char(' ', x, y)
 
 			else
-				screen Tui.set-screen-bg(Term.ColorDefault)
-				screen Tui.set-screen-fg(Term.ColorDefault)
-				num-bombs = tilemap count-neighbor-bombs(x, y)
+				screen Tui.set-screen-colors(Term.ColorDefault, Term.ColorDefault)
+				num-bombs = tilemap count-neighbor-bombs(xi, yi)
 				if num-bombs == 0
 					screen Tui.put-char(' ', x, y)
 				else
@@ -130,6 +142,9 @@ fn toggle-flag(tilemap TileMap, x, y)
 	tilemap map-tile(x, y, fn tile: tile { flagged: not tile.flagged })
 
 
+fn get-board-off(tui Ptr Tui.Tui, tilemap TileMap):
+	(tui&.width u32-i32()/2 - tilemap.width/2, tui&.height u32-i32()/2 - tilemap.height/2)
+
 
 args = Args.get()
 width = 9
@@ -160,6 +175,8 @@ while running
 	needs-redraw = False
 	for ev in Iter.from-function(Tui.read-key)
 		needs-redraw <= True
+		tui Tui.update-dimensions()  # update dimensions here, because we need to properly offset da thang
+
 		case ev
 			Tui.Key(Tui.Char(c))
 				if c == 'q'
@@ -168,9 +185,11 @@ while running
 					tilemap <= generate-map(width, height, bombs, al)
 					game-state <= InProgress
 			Tui.Mouse(ev)
+				x = ev.x - tui get-board-off(tilemap) fst() 
+				y = ev.y - tui get-board-off(tilemap) snd() 
 				if ev.button == Tui.MouseLeft and ev.pressed
 					if game-state == InProgress
-						if not tilemap[(ev.x, ev.y)].flagged and tilemap uncover-tile(ev.x, ev.y)
+						if not tilemap[(x, y)].flagged and tilemap uncover-tile(x, y)
 							game-state <= Failed
 
 						if game-state == InProgress and tilemap is-game-won()
@@ -178,9 +197,10 @@ while running
 
 				if ev.button == Tui.MouseRight and ev.pressed
 					if game-state == InProgress
-						tilemap toggle-flag(ev.x, ev.y)
+						tilemap toggle-flag(x, y)
 
-	needs-redraw <= needs-redraw or screen Tui.resize-screen-if-needed()
+	if screen Tui.resize-screen-if-needed()
+		needs-redraw <= True
 
 
 	if needs-redraw
@@ -188,12 +208,12 @@ while running
 		screen Tui.set-screen-colors(Term.ColorDefault, Term.ColorDefault)
 		screen Tui.fill-default()
 
-		screen render-tiles(tilemap, game-state)
+		screen render-tiles(tilemap, tui get-board-off(tilemap), game-state)
 		screen Tui.set-screen-colors(Term.ColorDefault, Term.ColorDefault)
 		if game-state == Failed
-			screen Tui.draw-str('ya failed. restart? (r)', 0, tilemap.height)
+			screen Tui.draw-str-center('ya failed. restart? (r)', tui&.width u32-i32() / 2, tilemap.height + tui get-board-off(tilemap) snd() + 2)
 		elif game-state == Won
-			screen Tui.draw-str('ya won. quit? (q)', 0, tilemap.height)
+			screen Tui.draw-str-center('ya won. quit? (q)', tui&.width u32-i32() / 2, tilemap.height + tui get-board-off(tilemap) snd() + 2)
 
 		screen Tui.render-screen()
 
