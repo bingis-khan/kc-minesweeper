@@ -6527,7 +6527,7 @@ static  enum Unit_160   render_dash_tiles887 (    struct Screen_432 *  screen262
             if ( ( ( dref2950 .field0 ) .f_hidden ) ) {
                 ( (  set_dash_screen_dash_bg850 ) ( (  screen2629 ) ,  (  bg2955 ) ) );
                 if ( ( ( dref2950 .field0 ) .f_flagged ) ) {
-                    ( (  set_dash_screen_dash_fg849 ) ( (  screen2629 ) ,  ( ( Color_17_Color8 ) ( ( Color8_18_Blue8 ) ) ) ) );
+                    ( (  set_dash_screen_dash_fg849 ) ( (  screen2629 ) ,  ( ( Color_17_Color8 ) ( ( Color8_18_Red8 ) ) ) ) );
                     ( (  put_dash_char858 ) ( (  screen2629 ) ,  ( (  from_dash_charlike1 ) ( ( "F" ) ) ) ,  (  x2953 ) ,  (  y2954 ) ) );
                 } else {
                     ( (  put_dash_char858 ) ( (  screen2629 ) ,  ( (  from_dash_charlike1 ) ( ( " " ) ) ) ,  (  x2953 ) ,  (  y2954 ) ) );

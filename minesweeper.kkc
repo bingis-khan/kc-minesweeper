@@ -90,7 +90,7 @@ fn render-tiles (screen Ptr (Tui.Screen Allocator), tilemap TileMap, (x-off, y-o
 			if col.hidden
 				screen Tui.set-screen-bg(bg)
 				if col.flagged
-					screen Tui.set-screen-fg(Term.Color8(Term.Blue8))
+					screen Tui.set-screen-fg(Term.Color8(Term.Red8))
 					screen Tui.put-char('F', x, y)
 				else
 					screen Tui.put-char(' ', x, y)
