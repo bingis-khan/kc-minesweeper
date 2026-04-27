@@ -198,11 +198,7 @@ screen =& tui Tui.mk-screen(al)
 
 running = True
 while running
-	needs-redraw = False
-	for ev in Iter.from-function(Tui.read-key)
-		needs-redraw <= True
-		tui Tui.update-dimensions()  # update dimensions here, because we need to properly offset da thang
-
+	for ev in Iter.from-function(fn: Tui.read-event(tui))
 		case ev
 			Tui.Key(Tui.Char(c))
 				if c == 'q'
@@ -227,11 +223,9 @@ while running
 					if game-state == InProgress
 						tilemap toggle-flag(x, y)
 
-	if screen Tui.resize-screen-if-needed()
-		needs-redraw <= True
+	screen Tui.resize-screen-if-needed()
 
-
-	if needs-redraw
+	if tui Tui.should-redraw()
 		screen Tui.clear-screen()
 		screen Tui.set-screen-colors(Term.ColorDefault, Term.ColorDefault)
 		screen Tui.fill-default()
