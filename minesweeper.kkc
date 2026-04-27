@@ -145,6 +145,30 @@ fn toggle-flag(tilemap TileMap, x, y)
 fn get-board-off(tui Ptr Tui.Tui, tilemap TileMap):
 	(tui&.width u32-i32()/2 - tilemap.width/2, tui&.height u32-i32()/2 - tilemap.height/2)
 
+# Scoring
+Stats
+	total-wins U32
+	
+fn load-score(al) -> Stats
+	data-dir = XDG.data-home()
+	stats-file = '\(data-dir)/kc-minesweeper/stats'
+	case with(stats-file StrBuilder.mk-const-str(al), fn filename: filename StrBuilder.free-const-str(al), fn filename: filename File.try-read-contents(al))
+		None
+			return { total-wins: 0 }
+		Just(stats)
+			it =& stats lines() into-iter()
+			total-wins = it next() and-maybe(parse-int) or-else(0) i64-u32()
+			return { total-wins }
+
+
+fn save-score(stats Stats, al)
+	data-dir = XDG.data-home()
+	minesweeper-data-dir = '\(data-dir)/kc-minesweeper'
+	minesweeper-data-dir Sh.mkdir-p(al)
+	
+	stats-file = '\(minesweeper-data-dir)/stats'
+	with(stats-file StrBuilder.mk-const-str(al), fn filename: filename StrBuilder.free-const-str(al), fn filename: filename File.write-contents('\(stats.total-wins)\n'))
+
 
 args = Args.get()
 width = 9
@@ -161,9 +185,11 @@ case args
 		panic('args??')
 
 
+al = Alloc.idc()
+stats = load-score(al)
+
 game-state = InProgress
 
-al = Alloc.idc()
 tilemap = generate-map(width, height, bombs, al)
 
 tui =& Tui.mk()
@@ -194,6 +220,8 @@ while running
 
 						if game-state == InProgress and tilemap is-game-won()
 							game-state <= Won
+							stats <.total-wins= stats.total-wins + 1
+							stats save-score(al)
 
 				if ev.button == Tui.MouseRight and ev.pressed
 					if game-state == InProgress
@@ -207,6 +235,8 @@ while running
 		screen Tui.clear-screen()
 		screen Tui.set-screen-colors(Term.ColorDefault, Term.ColorDefault)
 		screen Tui.fill-default()
+
+		screen Tui.draw-str('total wins: \(stats.total-wins)', 0, 0)
 
 		screen render-tiles(tilemap, tui get-board-off(tilemap), game-state)
 		screen Tui.set-screen-colors(Term.ColorDefault, Term.ColorDefault)

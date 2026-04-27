@@ -1,0 +1,9 @@
+#!/bin/env kkc
+
+al = Alloc.idc()
+if 'minesweeper' Sh.deps(['minesweeper.kkc'])
+	Sh.run('kkc --backend c minesweeper.kkc --dontRun', al)
+	Sh.run('cc -O2 minesweeper.c -o minesweeper', al)
+
+home = Env.get('HOME') or-fail('$HOME not defined')
+Sh.run('cp minesweeper \(home)/.local/bin/', al)
