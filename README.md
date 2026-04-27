@@ -7,4 +7,5 @@ minesweeper clone written in [kc](https://github.com/bingis-khan/kkc).
 ## todo
 
 - [ ] premade levels like the original
-- [ ] stattrak (add new XDG/Xdg module to std)
+- [x] stattrak (add new XDG/Xdg module to std)
+- [ ] more detailed stats which track board size and bombs. (for any size, but distinguish premade)
